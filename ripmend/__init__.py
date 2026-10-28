@@ -1,3 +1,6 @@
 """Repair damaged CD rips using other rips of the same disc."""
 
-__version__ = "0.1.0"
+try:
+    from ._version import version as __version__
+except ImportError:  # running from a source tree that was never installed
+    __version__ = "unknown"

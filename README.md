@@ -23,8 +23,9 @@ bit-exact lossless audio with no gaps.
    drive's error concealment (a channel frozen on one value).
 5. **Replace made-up samples.** A failing disc makes the drive invent many
    individual samples (repeating the last one or averaging its neighbours),
-   which sounds like bursts of hiss. These are found sample by sample and
-   rebuilt from the lossy rip, anchored to the real samples around them.
+   which sounds like bursts of hiss, and sometimes misreads a single sample
+   outright, which clicks. These are found sample by sample and rebuilt from
+   the lossy rip, anchored to the real samples around them.
 6. **Learn the difference.** On the stretches where both are known good,
    ripmend compares the spectra of the lossy and lossless rips and builds an
    EQ curve that makes the lossy fill match the lossless tonal balance and
@@ -98,7 +99,8 @@ Or repair one track from files you name:
 ripmend repair "02 Track02.wav" "Artist - 02 - Title.ogg" "Track 2.mp3" -o 02-fixed.wav
 ```
 
-Each output WAV gets a `.report.json` next to it listing how much came from
+Run `ripmend --version` to see which build you have (it includes the git
+commit). Each output WAV gets a `.report.json` next to it listing how much came from
 each rip, how many timing jumps were found, what share is bit-exact lossless,
 the EQ that was applied, and every time range that was filled from lossy audio.
 

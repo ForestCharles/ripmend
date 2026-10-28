@@ -11,12 +11,15 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import align, detect, eqmatch
+from . import __version__, align, detect, eqmatch
 from .audio import RATE, load
 
 SUB = 256          # granularity of the keep/fill decision, in samples
 NOISE_FLOOR = 64.0 # int16 units; errors below this always pass
 SILENT_PEAK = 100  # sources quieter than this everywhere are failed extracts
+OUTLIER_K = 6.0    # a sample this many times the local lossy mismatch is a read error
+OUTLIER_MIN = 400  # int16 units; smaller deviations are left alone
+EQ_CLEAN_MAX = 0.02  # learn the EQ only where at most this share of samples was patched
 
 
 @dataclass
@@ -101,6 +104,18 @@ def _patch(layer, fallback):
     return out
 
 
+def _outliers(sig, fallback):
+    """Samples that jump away from the lossy rip far more than codec noise does."""
+    bad = np.zeros(sig.shape, bool)
+    for ch in range(sig.shape[1]):
+        r = (sig[:, ch] - fallback[:, ch]).astype(np.float64)
+        total, n = _moving_sum(r, 9)
+        dev = r - total / n
+        power, n = _moving_sum(dev * dev, 441)
+        bad[:, ch] = np.abs(dev) > np.maximum(OUTLIER_K * np.sqrt(power / n), OUTLIER_MIN)
+    return bad
+
+
 def _moving_sum(x, size):
     """Sum of x over a centered window of `size` samples, clamped at the ends."""
     csum = np.concatenate(([0.0], np.cumsum(x, dtype=np.float64)))
@@ -169,8 +184,14 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
 
     if eq and primaries:
         target = _patch(primaries[0], ref_layer.mapped)
+        # Patched samples carry the lossy rip's own sound, so learn the EQ
+        # from stretches the drive read cleanly.
+        patched, n = _moving_sum(primaries[0].concealed.any(1), eqmatch.FFT)
+        clean = patched / n <= EQ_CLEAN_MAX
         for layer in [ref_layer] + other_lossy:
             mask = primaries[0].good & layer.good
+            if eqmatch.fit(target, layer.mapped, mask & clean) is not None:
+                mask &= clean
             fitted = eqmatch.fit(target, layer.mapped, mask)
             if fitted is None:
                 continue
@@ -190,9 +211,15 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
             primaries.sort(key=lambda l: -l.good.mean())
 
     for layer in primaries:
+        # Uncorrected read errors leave single garbage samples (clicks) that
+        # are too short to fail the 6 ms check. Find them against the lossy
+        # rip, twice, since a big spike hides smaller ones next to it.
+        for _ in range(2):
+            patched = _patch(layer, ref_layer.mapped)
+            layer.concealed |= _outliers(patched, ref_layer.mapped) & layer.good[:, None]
         layer.mapped = _patch(layer, ref_layer.mapped)
         log(f"  replaced {layer.concealed[layer.good].mean():.1%} of samples in {layer.source.name}"
-            " that the drive had concealed")
+            " that the drive had concealed or misread")
 
     layers = primaries + [ref_layer] + other_lossy
     out = np.zeros((length, 2), np.float32)
@@ -206,7 +233,7 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
     out += remaining[:, None] * ref_layer.mapped
     used[len(primaries)] = used[len(primaries)] + remaining
 
-    report = {"reference": ref.path, "duration_s": round(length / RATE, 3), "sources": []}
+    report = {"ripmend_version": __version__, "reference": ref.path, "duration_s": round(length / RATE, 3), "sources": []}
     for layer, take in zip(layers, used):
         entry = {
             "path": layer.source.path,
