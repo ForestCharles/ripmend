@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict
 
 from . import __version__
-from .audio import write_wav
+from .audio import decode, write_wav
 from .repair import repair
 
 AUDIO_EXTS = {".wav", ".flac", ".aif", ".aiff", ".ogg", ".opus", ".mp3", ".m4a", ".aac", ".wma", ".ape", ".wv"}
@@ -46,6 +46,45 @@ def run_one(paths, out_path, args):
         print(line)
 
 
+def run_audit(args):
+    from .audit import audit, suspects_reel
+
+    out, ref = decode(args.repaired), decode(args.reference)
+    report_path = args.report or os.path.splitext(args.repaired)[0] + ".report.json"
+    report = None
+    if os.path.exists(report_path):
+        with open(report_path) as f:
+            report = json.load(f)
+    witness = decode(args.witness) if args.witness else None
+    findings, positions, off = audit(out, ref, report, top=args.top, witness=witness)
+    base = os.path.splitext(args.repaired)[0]
+    with open(base + ".audit.json", "w") as f:
+        json.dump(findings, f, indent=2)
+    write_wav(base + ".suspects.wav", suspects_reel(out, ref, positions, off))
+
+    pulse = findings["treble_pulsing"]
+    conceal = findings["concealment_signatures"]
+    print(f"{findings['suspect_count']} suspect moments "
+          f"({findings['spike_samples']} spike samples, {findings['residual_dips']} 5 ms residual dips)")
+    for s in findings["suspects"]:
+        m, sec = divmod(s["time_s"], 60)
+        verdict = f"  [{s['verdict']}]" if "verdict" in s else ""
+        print(f"  {int(m)}:{sec:06.3f}  {s['score_db']:5.1f} dB over normal{verdict}")
+    if "confirmed_by_witness" in findings:
+        print(f"{findings['confirmed_by_witness']} suspects where both lossy rips agree and the repaired track doesn't")
+    print(f"treble pulse vs reference: strongest at {pulse['peak_hz']} Hz, {pulse['peak_over_median']}x the median "
+          f"(swing {pulse['swing_db']} dB)")
+    base_pulse = findings.get("treble_pulsing_witness_vs_reference")
+    if base_pulse:
+        print(f"  baseline, witness vs reference: {base_pulse['peak_hz']} Hz, {base_pulse['peak_over_median']}x "
+              f"(swing {base_pulse['swing_db']} dB)")
+    print(f"guessed-sample patterns: {conceal['output']:.2%} vs {conceal['reference_chance']:.2%} by chance")
+    if findings["splices"]:
+        sp = findings["splices"]
+        print(f"splices: {sp['count']}, median {sp['median_snr_db']} dB match, worst {sp['worst_snr_db']} dB")
+    print(f"wrote {base}.audit.json and {base}.suspects.wav (each suspect: reference, then repaired)")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="ripmend", description=__doc__)
     p.add_argument("--version", action="version", version=f"ripmend {__version__}")
@@ -64,7 +103,17 @@ def main(argv=None):
     b.add_argument("output_dir")
     b.add_argument("-r", "--recursive", action="store_true", help="also look in subfolders")
 
+    a = sub.add_parser("audit", help="sweep a repaired track for glitches against a lossy rip")
+    a.add_argument("repaired")
+    a.add_argument("reference", help="a lossy rip of the same track, e.g. the OGG")
+    a.add_argument("--report", help="the repair's .report.json (found automatically next to the WAV)")
+    a.add_argument("--witness", help="a second lossy rip (e.g. the MP3) to confirm or rule out suspects")
+    a.add_argument("--top", type=int, default=20, help="suspects to list and put in the reel (default 20)")
+
     args = p.parse_args(argv)
+    if args.cmd == "audit":
+        run_audit(args)
+        return
     if args.cmd == "repair":
         run_one(args.sources, args.output, args)
         return
