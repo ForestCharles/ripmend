@@ -19,6 +19,7 @@ NOISE_FLOOR = 64.0 # int16 units; errors below this always pass
 SILENT_PEAK = 100  # sources quieter than this everywhere are failed extracts
 OUTLIER_K = 6.0    # a sample this many times the local lossy mismatch is a read error
 OUTLIER_MIN = 400  # int16 units; smaller deviations are left alone
+EQ_CLEAN_MAX = 0.02  # learn the EQ only where at most this share of samples was patched
 
 
 @dataclass
@@ -183,8 +184,14 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
 
     if eq and primaries:
         target = _patch(primaries[0], ref_layer.mapped)
+        # Patched samples carry the lossy rip's own sound, so learn the EQ
+        # from stretches the drive read cleanly.
+        patched, n = _moving_sum(primaries[0].concealed.any(1), eqmatch.FFT)
+        clean = patched / n <= EQ_CLEAN_MAX
         for layer in [ref_layer] + other_lossy:
             mask = primaries[0].good & layer.good
+            if eqmatch.fit(target, layer.mapped, mask & clean) is not None:
+                mask &= clean
             fitted = eqmatch.fit(target, layer.mapped, mask)
             if fitted is None:
                 continue
