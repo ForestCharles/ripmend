@@ -30,12 +30,22 @@ bit-exact lossless audio with no gaps.
 
 ## Install
 
-Needs Python 3.9+ and ffmpeg on your PATH (Windows: `winget install ffmpeg`;
-Mac: `brew install ffmpeg`; Linux: your package manager). The only Python
+You need Python 3.9+ and ffmpeg (Windows: `winget install ffmpeg`, Mac:
+`brew install ffmpeg`, Linux: your package manager). The only Python
 dependency is numpy.
 
-Install into a fresh virtual environment, so packages already on your system
-can't clash with it.
+The easiest way is [pipx](https://pipx.pypa.io), which gives ripmend its own
+isolated environment so it can't clash with other Python packages:
+
+```
+pipx install git+https://github.com/ForestCharles/ripmend
+```
+
+Upgrade later with `pipx upgrade ripmend`.
+
+### Without pipx
+
+Clone the repo and install into a fresh virtual environment.
 
 Mac / Linux:
 
@@ -57,8 +67,8 @@ py -m venv .venv
 pip install .
 ```
 
-Activate the environment again (the `source` / `Activate.ps1` line) in each
-new terminal before running `ripmend`.
+With this route, run the activate line again in each new terminal before
+using `ripmend`.
 
 ## Use
 
