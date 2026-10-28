@@ -45,7 +45,14 @@ isolated environment so it can't clash with other Python packages:
 pipx install git+https://github.com/ForestCharles/ripmend
 ```
 
-Upgrade later with `pipx upgrade ripmend`.
+To upgrade to the latest version, run the same command with `--force`:
+
+```
+pipx install --force git+https://github.com/ForestCharles/ripmend
+```
+
+If you cloned the repo instead, run `git pull` and then `pip install .` again
+with the virtual environment active.
 
 ### Without pipx
 
