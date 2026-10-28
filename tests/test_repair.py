@@ -93,3 +93,15 @@ def test_concealed_samples_are_replaced(rips, tmp_path):
     hf_err = lambda x: (np.diff(x[:n].astype(np.float64) - clean[:n], axis=0) ** 2).sum()
     assert report["sources"][0]["concealed_replaced"] > 0.05
     assert hf_err(out) < hf_err(concealed) / 4
+
+
+def test_misread_samples_are_replaced(rips, tmp_path):
+    d, clean = rips
+    rng = np.random.default_rng(3)
+    misread = clean.copy()
+    spots = rng.integers(RATE, len(clean) - RATE, 40)
+    misread[spots, rng.integers(0, 2, 40)] = rng.integers(-20000, 20000, 40)
+    write_wav(str(tmp_path / "misread.wav"), misread)
+    out, _ = repair([str(tmp_path / "misread.wav"), str(d / "lossy.ogg")], log=lambda *_: None)
+    worst = np.abs(out[spots].astype(np.float64) - clean[spots]).max()
+    assert worst < 2000, worst
