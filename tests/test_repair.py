@@ -105,3 +105,14 @@ def test_misread_samples_are_replaced(rips, tmp_path):
     out, _ = repair([str(tmp_path / "misread.wav"), str(d / "lossy.ogg")], log=lambda *_: None)
     worst = np.abs(out[spots].astype(np.float64) - clean[spots]).max()
     assert worst < 2000, worst
+
+
+def test_audit_finds_planted_click(rips):
+    from ripmend.audit import audit
+
+    d, clean = rips
+    clicked = clean.astype(np.float32)
+    spot = 5 * RATE + 123
+    clicked[spot] = -clicked[spot] + 15000
+    findings, positions, _ = audit(clicked, decode(str(d / "lossy.ogg")), top=5)
+    assert any(abs(p - spot) < RATE // 20 for p in positions), findings["suspects"]

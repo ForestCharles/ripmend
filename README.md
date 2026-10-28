@@ -111,6 +111,27 @@ Options (put them before `repair`/`batch`):
 - `--crossfade N`: splice crossfade in samples (default 128).
 - `--no-eq`: use the lossy fill as is.
 
+## Checking the result
+
+`ripmend audit` sweeps a repaired track for glitches by comparing it with a
+lossy rip, sample by sample:
+
+```
+ripmend audit 02.wav "Artist - 02 - Title.ogg" --witness "Track 2.mp3"
+```
+
+It lists the moments where the repaired track departs from the lossy rip far
+more than codec noise does (clicks, dropouts, bad splices), checks whether
+the treble pulses a few times a second, and counts leftover made-up samples.
+With `--witness` (a second lossy rip) it marks the suspects where both lossy
+rips agree with each other but not with the repaired track; those are the
+ones worth listening to first. It writes `02.audit.json` and
+`02.suspects.wav`, a reel that plays each suspect from the lossy rip and then
+from the repaired track.
+
+It can only see problems relative to the lossy rips: anything they share,
+such as a click that is on the disc itself, cancels out.
+
 ## Limits
 
 - At least one lossy rip is required; it is what the lossless rip is checked
