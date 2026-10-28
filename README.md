@@ -21,11 +21,15 @@ bit-exact lossless audio with no gaps.
 4. **Verify.** Each 6 ms chunk of the lossless rip is kept only if it matches
    the reference to within lossy-codec noise (10 dB by default) and isn't a
    drive's error concealment (a channel frozen on one value).
-5. **Learn the difference.** On the stretches where both are known good,
+5. **Replace made-up samples.** A failing disc makes the drive invent many
+   individual samples (repeating the last one or averaging its neighbours),
+   which sounds like bursts of hiss. These are found sample by sample and
+   rebuilt from the lossy rip, anchored to the real samples around them.
+6. **Learn the difference.** On the stretches where both are known good,
    ripmend compares the spectra of the lossy and lossless rips and builds an
    EQ curve that makes the lossy fill match the lossless tonal balance and
    level.
-6. **Splice.** Lossless where verified, otherwise the EQ-matched reference,
+7. **Splice.** Lossless where verified, otherwise the EQ-matched reference,
    otherwise the next lossy rip, with a 3 ms crossfade at each splice.
 
 ## Install

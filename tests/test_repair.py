@@ -71,3 +71,25 @@ def test_silent_rip_is_ignored(rips, tmp_path):
     write_wav(str(tmp_path / "silent.wav"), np.zeros_like(clean))
     _, report = repair([str(tmp_path / "silent.wav"), str(d / "lossy.ogg")], log=lambda *_: None)
     assert [s["path"] for s in report["sources"]] == [str(d / "lossy.ogg")]
+
+
+def _conceal(clean, rng):
+    """Bursts where every other sample is made up by the drive (held or averaged)."""
+    v = clean.astype(np.int64)
+    for ch in range(2):
+        for start in rng.integers(1, len(v) - 3000, 60):
+            for i in range(start, start + int(rng.integers(500, 3000)), 2):
+                v[i, ch] = v[i - 1, ch] if rng.random() < 0.5 else (v[i - 1, ch] + v[i + 1, ch]) // 2
+    return v.astype(np.int16)
+
+
+def test_concealed_samples_are_replaced(rips, tmp_path):
+    d, clean = rips
+    concealed = _conceal(clean, np.random.default_rng(2))
+    write_wav(str(tmp_path / "concealed.wav"), concealed)
+    out, report = repair([str(tmp_path / "concealed.wav"), str(d / "lossy.ogg")], log=lambda *_: None)
+    n = min(len(out), len(clean))
+    # High-frequency error is what the made-up samples sound like (hiss bursts).
+    hf_err = lambda x: (np.diff(x[:n].astype(np.float64) - clean[:n], axis=0) ** 2).sum()
+    assert report["sources"][0]["concealed_replaced"] > 0.05
+    assert hf_err(out) < hf_err(concealed) / 4
