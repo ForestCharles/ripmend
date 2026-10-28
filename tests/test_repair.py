@@ -4,9 +4,8 @@ import subprocess
 
 import numpy as np
 import pytest
-from scipy.io import wavfile
 
-from ripmend.audio import RATE, decode
+from ripmend.audio import RATE, decode, write_wav
 from ripmend.repair import repair
 
 
@@ -40,8 +39,8 @@ def _damage(clean, rng):
 def rips(tmp_path_factory):
     d = tmp_path_factory.mktemp("rips")
     clean = _music(12)
-    wavfile.write(d / "clean.wav", RATE, clean)
-    wavfile.write(d / "damaged.wav", RATE, _damage(clean, np.random.default_rng(1)))
+    write_wav(str(d / "clean.wav"), clean)
+    write_wav(str(d / "damaged.wav"), _damage(clean, np.random.default_rng(1)))
     subprocess.run(["ffmpeg", "-v", "error", "-i", d / "clean.wav", "-c:a", "libvorbis", "-q:a", "5",
                     d / "lossy.ogg"], check=True)
     return d, clean
@@ -69,6 +68,6 @@ def test_repair_matches_clean(rips):
 
 def test_silent_rip_is_ignored(rips, tmp_path):
     d, clean = rips
-    wavfile.write(tmp_path / "silent.wav", RATE, np.zeros_like(clean))
+    write_wav(str(tmp_path / "silent.wav"), np.zeros_like(clean))
     _, report = repair([str(tmp_path / "silent.wav"), str(d / "lossy.ogg")], log=lambda *_: None)
     assert [s["path"] for s in report["sources"]] == [str(d / "lossy.ogg")]

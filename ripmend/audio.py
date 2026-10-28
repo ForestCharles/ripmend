@@ -6,10 +6,10 @@ so lossless samples survive the round trip bit for bit.
 
 import json
 import subprocess
+import wave
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.io import wavfile
 
 RATE = 44100
 LOSSLESS_CODECS = {"flac", "alac", "wavpack", "ape", "tta", "mlp", "truehd"}
@@ -58,4 +58,8 @@ def load(path):
 
 def write_wav(path, samples):
     pcm = np.clip(np.round(samples), -32768, 32767).astype(np.int16)
-    wavfile.write(path, RATE, pcm)
+    with wave.open(path, "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(RATE)
+        f.writeframes(pcm.astype("<i2").tobytes())
