@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ripmend"
+version = "0.1.0"
+description = "Repair damaged CD rips using lossy rips of the same disc"
+requires-python = ">=3.9"
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+ripmend = "ripmend.cli:main"
+
+[tool.setuptools]
+packages = ["ripmend"]
