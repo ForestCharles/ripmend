@@ -7,6 +7,7 @@ import re
 import sys
 from collections import defaultdict
 
+from . import __version__
 from .audio import write_wav
 from .repair import repair
 
@@ -47,6 +48,7 @@ def run_one(paths, out_path, args):
 
 def main(argv=None):
     p = argparse.ArgumentParser(prog="ripmend", description=__doc__)
+    p.add_argument("--version", action="version", version=f"ripmend {__version__}")
     p.add_argument("--threshold", type=float, default=10.0,
                    help="dB a lossless rip must match the reference by to be kept (default 10)")
     p.add_argument("--crossfade", type=int, default=128, help="splice crossfade length in samples (default 128)")

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ripmend"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Repair damaged CD rips using lossy rips of the same disc"
 requires-python = ">=3.9"
 dependencies = ["numpy>=1.22"]
@@ -17,3 +17,9 @@ ripmend = "ripmend.cli:main"
 
 [tool.setuptools]
 packages = ["ripmend"]
+
+# The version comes from git: 0.1.devN+g<commit> between releases, so every
+# install from GitHub reports exactly which commit it was built from.
+[tool.setuptools_scm]
+version_file = "ripmend/_version.py"
+fallback_version = "0.0.0+unknown"

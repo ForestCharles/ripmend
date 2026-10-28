@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from . import align, detect, eqmatch
+from . import __version__, align, detect, eqmatch
 from .audio import RATE, load
 
 SUB = 256          # granularity of the keep/fill decision, in samples
@@ -233,7 +233,7 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
     out += remaining[:, None] * ref_layer.mapped
     used[len(primaries)] = used[len(primaries)] + remaining
 
-    report = {"reference": ref.path, "duration_s": round(length / RATE, 3), "sources": []}
+    report = {"ripmend_version": __version__, "reference": ref.path, "duration_s": round(length / RATE, 3), "sources": []}
     for layer, take in zip(layers, used):
         entry = {
             "path": layer.source.path,

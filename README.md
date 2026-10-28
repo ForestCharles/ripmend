@@ -99,7 +99,8 @@ Or repair one track from files you name:
 ripmend repair "02 Track02.wav" "Artist - 02 - Title.ogg" "Track 2.mp3" -o 02-fixed.wav
 ```
 
-Each output WAV gets a `.report.json` next to it listing how much came from
+Run `ripmend --version` to see which build you have (it includes the git
+commit). Each output WAV gets a `.report.json` next to it listing how much came from
 each rip, how many timing jumps were found, what share is bit-exact lossless,
 the EQ that was applied, and every time range that was filled from lossy audio.
 
