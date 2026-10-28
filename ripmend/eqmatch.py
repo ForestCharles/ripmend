@@ -47,6 +47,8 @@ def fit(target, fill, mask):
         sxx += (np.abs(np.fft.rfft(target[s:s + FFT] * win, axis=0)) ** 2).sum(1)
         syy += (np.abs(np.fft.rfft(fill[s:s + FFT] * win, axis=0)) ** 2).sum(1)
     sxx, syy = _octave_smooth(sxx), _octave_smooth(syy)
+    if not (sxx > 0).all() or not (syy > 0).all():
+        return None  # one side is silent in some band; nothing reliable to learn
     floor = 1e-9 * max(sxx.max(), syy.max())
     gain_db = 10 * np.log10((sxx + floor) / (syy + floor))
     # Above a lossy encoder's lowpass there is nothing to restore; boosting

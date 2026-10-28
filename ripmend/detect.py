@@ -40,4 +40,9 @@ def concealed_mask(x, min_level=64):
     mask[1:] |= (v[1:] == v[:-1]) & loud[1:]
     mid = v[:-2] + v[2:]
     mask[1:-1] |= (np.abs(2 * v[1:-1] - mid) <= 1) & (v[:-2] != v[2:]) & loud[1:-1]
+    # A value held for three samples or more is suspect even when it's small:
+    # the drive can freeze near zero while the music swings far away.
+    triple = (v[2:] == v[1:-1]) & (v[1:-1] == v[:-2]) & (v[1:-1] != 0)
+    mask[2:] |= triple
+    mask[1:-1] |= triple
     return mask

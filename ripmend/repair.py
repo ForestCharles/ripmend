@@ -19,6 +19,7 @@ NOISE_FLOOR = 64.0 # int16 units; errors below this always pass
 SILENT_PEAK = 100  # sources quieter than this everywhere are failed extracts
 OUTLIER_K = 6.0    # a sample this many times the local lossy mismatch is a read error
 OUTLIER_MIN = 400  # int16 units; smaller deviations are left alone
+MIN_KEEP = 1024     # samples; shorter islands of good lossless audio inside damage aren't trusted
 EQ_CLEAN_MAX = 0.02  # learn the EQ only where at most this share of samples was patched
 
 
@@ -70,6 +71,14 @@ def _break_at_offset_changes(good, sub_offs, length):
     good[np.minimum(changes * SUB, length - 1)] = False
 
 
+def _drop_short_runs(good, min_len):
+    """Clear runs of True shorter than `min_len`, in place."""
+    edges = np.diff(np.concatenate(([0], good.astype(np.int8), [0])))
+    for s, e in zip(np.where(edges == 1)[0], np.where(edges == -1)[0]):
+        if e - s < min_len:
+            good[s:e] = False
+
+
 def _map(ref, src, nsub, length, threshold_db, check_ref=True):
     offs = align.track(ref, src.samples)
     sub_offs, err, power, known = _assign(ref, src.samples, offs, nsub)
@@ -81,6 +90,7 @@ def _map(ref, src, nsub, length, threshold_db, check_ref=True):
         ok = err <= power * 10 ** (-threshold_db / 10) + NOISE_FLOOR ** 2
         good &= _sample_mask(ok, length)
     _break_at_offset_changes(good, sub_offs, length)
+    _drop_short_runs(good, MIN_KEEP)
     concealed = detect.concealed_mask(src.samples)[idx] & valid[:, None]
     return Layer(src, mapped, good, sub_offs, concealed)
 
@@ -96,7 +106,9 @@ def _patch(layer, fallback):
     pos = np.arange(len(out))
     for ch in range(out.shape[1]):
         bad = layer.concealed[:, ch]
-        real = ~bad
+        # Anchor only to samples that passed the checks; next to a damaged
+        # stretch the "real" neighbours may be garbage.
+        real = ~bad & layer.good
         if not bad.any() or not real.any():
             continue
         err = layer.mapped[real, ch] - fallback[real, ch]
