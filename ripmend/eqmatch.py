@@ -9,7 +9,6 @@ there doesn't correlate with the original.
 """
 
 import numpy as np
-from scipy.signal import fftconvolve
 
 FFT = 4096
 TAPS = 1024
@@ -70,8 +69,14 @@ def _band_mismatch(sxx, syy):
     return float(np.sqrt(np.mean(np.square(diffs))))
 
 
-def apply(fill, h):
-    out = fftconvolve(fill, h[:, None], mode="full", axes=0)
+def apply(fill, h, block=1 << 16):
+    """Filter `fill` with zero-phase taps `h` (overlap-add, compensating the delay)."""
+    n = 1 << int(np.ceil(np.log2(block + TAPS - 1)))
+    hf = np.fft.rfft(h, n)[:, None]
+    out = np.zeros((len(fill) + n, fill.shape[1]))
+    for s in range(0, len(fill), block):
+        seg = np.fft.irfft(np.fft.rfft(fill[s:s + block], n, axis=0) * hf, n, axis=0)
+        out[s:s + n] += seg
     return out[TAPS // 2:TAPS // 2 + len(fill)].astype(np.float32)
 
 

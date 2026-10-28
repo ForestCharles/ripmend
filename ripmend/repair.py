@@ -10,7 +10,6 @@ lossless audio, with short crossfades at every splice.
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy.ndimage import minimum_filter1d, uniform_filter1d
 
 from . import align, detect, eqmatch
 from .audio import RATE, load
@@ -81,12 +80,24 @@ def _map(ref, src, nsub, length, threshold_db, check_ref=True):
     return Layer(src, mapped, good, sub_offs)
 
 
+def _moving_sum(x, size):
+    """Sum of x over a centered window of `size` samples, clamped at the ends."""
+    csum = np.concatenate(([0.0], np.cumsum(x, dtype=np.float64)))
+    i = np.arange(len(x))
+    lo = np.clip(i - size // 2, 0, len(x))
+    hi = np.clip(i - size // 2 + size, 0, len(x))
+    return csum[hi] - csum[lo], hi - lo
+
+
 def _soft(good, crossfade):
     """Turn a keep mask into weights that ramp down inside the kept region."""
     if crossfade <= 1:
         return good.astype(np.float32)
-    core = minimum_filter1d(good.astype(np.uint8), 2 * (crossfade // 2 + 1) + 1, mode="nearest")
-    w = uniform_filter1d(core.astype(np.float32), crossfade, mode="nearest")
+    width = 2 * (crossfade // 2 + 1) + 1
+    kept, n = _moving_sum(good, width)
+    core = (kept == n).astype(np.float32)
+    total, n = _moving_sum(core, crossfade)
+    w = (total / n).astype(np.float32)
     w[w > 1 - 1e-6] = 1.0
     w[w < 1e-6] = 0.0
     return w
