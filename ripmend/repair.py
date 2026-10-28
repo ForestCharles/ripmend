@@ -25,6 +25,7 @@ class Layer:
     mapped: np.ndarray = field(repr=False)
     good: np.ndarray = field(repr=False)
     sub_offs: np.ndarray = field(repr=False)
+    concealed: np.ndarray = field(default=None, repr=False)
     eq: dict = None
 
 
@@ -77,7 +78,27 @@ def _map(ref, src, nsub, length, threshold_db, check_ref=True):
         ok = err <= power * 10 ** (-threshold_db / 10) + NOISE_FLOOR ** 2
         good &= _sample_mask(ok, length)
     _break_at_offset_changes(good, sub_offs, length)
-    return Layer(src, mapped, good, sub_offs)
+    concealed = detect.concealed_mask(src.samples)[idx] & valid[:, None]
+    return Layer(src, mapped, good, sub_offs, concealed)
+
+
+def _patch(layer, fallback):
+    """Replace samples the drive made up with the fallback's, anchored to real ones.
+
+    The fallback (lossy) supplies the fine detail; its offset from the real
+    samples on either side is interpolated across the patch, so the low end
+    stays exactly as the lossless rip has it.
+    """
+    out = layer.mapped.copy()
+    pos = np.arange(len(out))
+    for ch in range(out.shape[1]):
+        bad = layer.concealed[:, ch]
+        real = ~bad
+        if not bad.any() or not real.any():
+            continue
+        err = layer.mapped[real, ch] - fallback[real, ch]
+        out[bad, ch] = fallback[bad, ch] + np.interp(pos[bad], pos[real], err)
+    return out
 
 
 def _moving_sum(x, size):
@@ -147,15 +168,15 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
     primaries.sort(key=lambda l: -l.good.mean())
 
     if eq and primaries:
-        target = primaries[0]
+        target = _patch(primaries[0], ref_layer.mapped)
         for layer in [ref_layer] + other_lossy:
-            mask = target.good & layer.good
-            fitted = eqmatch.fit(target.mapped, layer.mapped, mask)
+            mask = primaries[0].good & layer.good
+            fitted = eqmatch.fit(target, layer.mapped, mask)
             if fitted is None:
                 continue
             h, before = fitted
             matched = eqmatch.apply(layer.mapped, h)
-            after = eqmatch.fit(target.mapped, matched, mask)[1]
+            after = eqmatch.fit(target, matched, mask)[1]
             if after < before - 0.05:
                 layer.mapped = matched
                 layer.eq = {"mismatch_before_db": round(before, 2), "mismatch_after_db": round(after, 2),
@@ -167,6 +188,11 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
             for i, layer in enumerate(primaries):
                 primaries[i] = _map(ref_layer.mapped, layer.source, nsub, length, threshold_db)
             primaries.sort(key=lambda l: -l.good.mean())
+
+    for layer in primaries:
+        layer.mapped = _patch(layer, ref_layer.mapped)
+        log(f"  replaced {layer.concealed[layer.good].mean():.1%} of samples in {layer.source.name}"
+            " that the drive had concealed")
 
     layers = primaries + [ref_layer] + other_lossy
     out = np.zeros((length, 2), np.float32)
@@ -190,7 +216,8 @@ def repair(paths, threshold_db=10.0, crossfade=128, eq=True, log=print):
         }
         if layer.source.lossless:
             entry["timing_jumps"] = int((np.diff(layer.sub_offs) != 0).sum())
-            entry["bit_exact"] = round(float((take == 1).mean()), 4)
+            entry["concealed_replaced"] = round(float(layer.concealed[layer.good].mean()), 4)
+            entry["bit_exact"] = round(float(((take == 1) & ~layer.concealed.any(1)).mean()), 4)
         if layer.eq:
             entry["eq"] = layer.eq
         report["sources"].append(entry)
